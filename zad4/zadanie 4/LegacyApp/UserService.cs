@@ -2,32 +2,73 @@
 
 namespace LegacyApp
 {
+    public interface IClientRepository
+    {
+        Client GetById(int clientId);
+    }
+
+    public interface IUserCreditService : IDisposable
+    {
+        int GetCreditLimit(string lastName, DateTime dateOfBirth);
+    }
+
     public class UserService
     {
+        private readonly IClientRepository _clientRepository;
+        private readonly IUserCreditService _userCreditService;
+
+        public UserService(IClientRepository clientRepository, IUserCreditService userCreditService)
+        {
+            _clientRepository = clientRepository;
+            _userCreditService = userCreditService;
+        }
+
+        public UserService()
+        {
+            var _clientRepository = new ClientRepository();
+        }
+
         public bool AddUser(string firstName, string lastName, string email, DateTime dateOfBirth, int clientId)
         {
-            if (string.IsNullOrEmpty(firstName) || string.IsNullOrEmpty(lastName))
-            {
+            if (!IsValidUser(firstName, lastName, email, dateOfBirth))
                 return false;
+
+            if (_clientRepository == null)
+            {
+                var _clientRepository = new ClientRepository();
             }
 
-            if (!email.Contains("@") && !email.Contains("."))
-            {
+            var client = _clientRepository.GetById(clientId);
+
+            var user = CreateUser(client, firstName, lastName, email, dateOfBirth);
+
+            SetCreditLimit(user);
+
+            if (!IsCreditLimitValid(user))
                 return false;
-            }
+
+            UserDataAccess.AddUser(user);
+            return true;
+        }
+
+        private bool IsValidUser(string firstName, string lastName, string email, DateTime dateOfBirth)
+        {
+            if (string.IsNullOrEmpty(firstName) || string.IsNullOrEmpty(lastName))
+                return false;
+
+            if (!email.Contains("@") && !email.Contains("."))
+                return false;
 
             var now = DateTime.Now;
             int age = now.Year - dateOfBirth.Year;
-            if (now.Month < dateOfBirth.Month || (now.Month == dateOfBirth.Month && now.Day < dateOfBirth.Day)) age--;
+            if (now.Month < dateOfBirth.Month || (now.Month == dateOfBirth.Month && now.Day < dateOfBirth.Day))
+                age--;
 
-            if (age < 21)
-            {
-                return false;
-            }
+            return age >= 21;
+        }
 
-            var clientRepository = new ClientRepository();
-            var client = clientRepository.GetById(clientId);
-
+        private User CreateUser(Client client, string firstName, string lastName, string email, DateTime dateOfBirth)
+        {
             var user = new User
             {
                 Client = client,
@@ -38,35 +79,25 @@ namespace LegacyApp
             };
 
             if (client.Type == "VeryImportantClient")
-            {
                 user.HasCreditLimit = false;
-            }
-            else if (client.Type == "ImportantClient")
-            {
-                using (var userCreditService = new UserCreditService())
-                {
-                    int creditLimit = userCreditService.GetCreditLimit(user.LastName, user.DateOfBirth);
-                    creditLimit = creditLimit * 2;
-                    user.CreditLimit = creditLimit;
-                }
-            }
             else
-            {
                 user.HasCreditLimit = true;
-                using (var userCreditService = new UserCreditService())
-                {
-                    int creditLimit = userCreditService.GetCreditLimit(user.LastName, user.DateOfBirth);
-                    user.CreditLimit = creditLimit;
-                }
-            }
 
-            if (user.HasCreditLimit && user.CreditLimit < 500)
+            return user;
+        }
+
+        private void SetCreditLimit(User user)
+        {
+            if (user.HasCreditLimit)
             {
-                return false;
+                int creditLimit = _userCreditService.GetCreditLimit(user.LastName, user.DateOfBirth);
+                user.CreditLimit = user.Client.Type == "ImportantClient" ? creditLimit * 2 : creditLimit;
             }
+        }
 
-            UserDataAccess.AddUser(user);
-            return true;
+        private bool IsCreditLimitValid(User user)
+        {
+            return !user.HasCreditLimit || user.CreditLimit >= 500;
         }
     }
 }
