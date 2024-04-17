@@ -86,7 +86,7 @@ namespace LegacyApp
             return user;
         }
 
-        private void SetCreditLimit(User user)
+        public void SetCreditLimit(User user)
         {
             if (user.HasCreditLimit)
             {
@@ -95,7 +95,7 @@ namespace LegacyApp
             }
         }
 
-        private bool IsCreditLimitValid(User user)
+        public bool IsCreditLimitValid(User user)
         {
             return !user.HasCreditLimit || user.CreditLimit >= 500;
         }

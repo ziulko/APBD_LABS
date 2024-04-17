@@ -68,6 +68,6 @@ app.UseRouting();
 
 app.UseAuthorization();
 
-app.MapControllers(); // Mapowanie kontrolerów
+app.MapControllers();
 
 app.Run();
